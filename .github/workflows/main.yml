@@ -1,0 +1,17 @@
+name: Build project and deploy to SmarterASP.NET
+on: [push]
+
+jobs:
+  build_and_deploy:
+    name: Build package and deploy to SmarterASP.NET
+    runs-on: windows-latest
+    steps:
+      - name: build file
+        uses: actions/checkout@v4
+
+      - name: Sync files
+        uses: SamKirkland/FTP-Deploy-Action@v4.3.4
+        with:
+          server: win8139.site4now.net
+          username: almostakbalsys-001
+          password: P@ssw0rd@38b
