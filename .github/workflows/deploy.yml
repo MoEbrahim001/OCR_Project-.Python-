@@ -1,69 +1,28 @@
-name: Deploy Angular + .NET + Python App to SmarterASP
+name: 🚀 Deploy Python API to SmarterASP.NET
 
 on:
   push:
     branches:
-      - main
+      - main   # or your branch name
 
 jobs:
-  build_and_deploy:
-    runs-on: windows-latest
+  deploy:
+    runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout repository
+      - name: Checkout code
         uses: actions/checkout@v4
 
-      # ====== Build Angular ======
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-
-      - name: Install and build Angular
-        working-directory: ./frontend
-        run: |
-          npm install
-          npm run build --configuration production
-
-      # ====== Build .NET Backend ======
-      - name: Setup .NET 8
-        uses: actions/setup-dotnet@v4
-        with:
-          dotnet-version: 8.0
-
-      - name: Restore and build .NET
-        working-directory: ./dotnet-backend
-        run: |
-          dotnet restore
-          dotnet publish --configuration Release --output ./publish
-
-      # ====== Prepare Python Backend ======
-      - name: Setup Python 3.12
-        uses: actions/setup-python@v4
-        with:
-          python-version: '3.12'
-
-      - name: Install Python dependencies
-        working-directory: ./python-backend
-        run: |
-          pip install --upgrade pip
-          pip install -r requirements.txt
-
-      # (Optional) Zip the whole deployment if needed
-      - name: Prepare Deployment Folder
-        run: |
-          mkdir deploy
-          xcopy frontend\\dist\\* deploy\\ /E /I /Y
-          xcopy dotnet-backend\\publish\\* deploy\\ /E /I /Y
-          xcopy python-backend\\* deploy\\ /E /I /Y
-
-      # ====== Deploy via FTP ======
-      - name: Upload files via FTP
-        uses: SamKirkland/FTP-Deploy-Action@v4
+      - name: Upload via FTP to SmarterASP.NET
+        uses: SamKirkland/FTP-Deploy-Action@v4.3.4
         with:
           server: ${{ secrets.FTP_SERVER }}
           username: ${{ secrets.FTP_USERNAME }}
           password: ${{ secrets.FTP_PASSWORD }}
-          protocol: ftp
-          local-dir: ./deploy
-          server-dir: /wwwroot
+          server-dir: ${{ secrets.FTP_TARGET_DIR }}
+          local-dir: .
+          exclude: |
+            **/.git*
+            **/.github*
+            **/__pycache__/
+            **/venv/
