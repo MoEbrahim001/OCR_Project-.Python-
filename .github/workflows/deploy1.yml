@@ -1,28 +1,90 @@
-name: 🚀 Deploy Python API to SmarterASP.NET
+name: Build, publish and deploy (.NET to Simply + Python to SmarterASP.NET)
 
 on:
   push:
-    branches:
-      - main   # or your branch name
+    branches: [ main ]   # change if needed
 
 jobs:
-  deploy:
+  # ---------------------------
+  # 1) .NET 8 → Simply (Web Deploy)
+  # ---------------------------
+  dotnet_build_publish_deploy:
+    runs-on: windows-latest
+
+    env:
+      # <-- EDIT: set to your .csproj path (relative to repo root)
+      DOTNET_PROJECT: src/YourApi/YourApi.csproj
+      # Publish output folder (don’t change unless you know why)
+      PUBLISH_DIR: ${{ github.workspace }}\publish
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET 8 SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Restore
+        run: dotnet restore $env:DOTNET_PROJECT
+
+      - name: Build (Release)
+        run: dotnet build $env:DOTNET_PROJECT --configuration Release --no-restore
+
+      - name: Test
+        run: dotnet test --configuration Release --no-build
+
+      - name: Publish (framework-dependent)
+        run: dotnet publish $env:DOTNET_PROJECT --configuration Release -o "$env:PUBLISH_DIR"
+
+      # Optional: zip the publish output (some deploy tools prefer a zip; this action accepts a folder too)
+      - name: Create artifact zip
+        run: |
+          powershell -Command "if (Test-Path '${{ github.workspace }}\artifact.zip') { Remove-Item '${{ github.workspace }}\artifact.zip' }"
+          powershell -Command "Compress-Archive -Path '${{ env.PUBLISH_DIR }}\*' -DestinationPath '${{ github.workspace }}\artifact.zip'"
+
+      # Deploy via Web Deploy (MSDeploy) to Simply/SmarterASP (Web Deploy endpoint)
+      - name: Deploy to Simply (Web Deploy)
+        uses: talunzhang/auto-web-deploy@v1.0.1
+        with:
+          website-name: ${{ secrets.WEBDEPLOY_SITE_NAME }}               # e.g. yoursite-001-001
+          server-computer-name: ${{ secrets.WEBDEPLOY_SERVER }}          # e.g. https://winxxxx.site4now.net:8172/msdeploy.axd
+          server-username: ${{ secrets.WEBDEPLOY_USERNAME }}             # e.g. yoursite-001-001\username or provided deploy user
+          server-password: ${{ secrets.WEBDEPLOY_PASSWORD }}
+          # You can deploy the folder or the zip; pick ONE of the two lines below:
+          source-path: '${{ env.PUBLISH_DIR }}'                          # deploy folder
+          # source-path: '${{ github.workspace }}\artifact.zip'          # OR deploy zip
+
+  # ---------------------------
+  # 2) Python (FastAPI) → SmarterASP.NET (FTP)
+  # ---------------------------
+  python_ftp_deploy:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout code
+      - name: Checkout
         uses: actions/checkout@v4
 
+      # If you need to build anything (e.g., package, collect static), do it here.
+      # Otherwise we just push the repo content with excludes to your FTP target dir.
       - name: Upload via FTP to SmarterASP.NET
         uses: SamKirkland/FTP-Deploy-Action@v4.3.4
         with:
-          server: ${{ secrets.FTP_SERVER }}
-          username: ${{ secrets.FTP_USERNAME }}
+          server: ${{ secrets.FTP_SERVER }}               # e.g. ftp.yourdomain.com OR ftp.site4now.net
+          username: ${{ secrets.FTP_USERNAME }}           # your FTP user
           password: ${{ secrets.FTP_PASSWORD }}
-          server-dir: ${{ secrets.FTP_TARGET_DIR }}
-          local-dir: .
+          server-dir: ${{ secrets.FTP_TARGET_DIR }}       # e.g. /site/wwwroot/pyapi/
+          local-dir: .                                    # deploy repo root (adjust if your API lives in subfolder)
           exclude: |
             **/.git*
             **/.github*
             **/__pycache__/
             **/venv/
+            **/node_modules/
+            **/*.pyc
+            **/*.pyo
+            **/*.pyd
+            **/.python-version
+            **/.venv/
+            **/.vscode/
